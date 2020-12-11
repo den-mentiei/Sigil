@@ -100,8 +100,10 @@ namespace Sigil
                 }
             }
 
+            // If calling convention is CallingConventions.HasThis, `emit.ParameterTypes` will
+            // include implicit this already.
             var expectedParams = ((LinqArray<Type>)emit.ParameterTypes).Select(s => TypeOnStack.Get(s)).ToList();
-
+            
             if (arglist != null)
             {
                 expectedParams.AddRange(((LinqArray<Type>)arglist).Select(t => TypeOnStack.Get(t)));
@@ -113,13 +115,16 @@ namespace Sigil
             {
                 if (HasFlag(emit.CallingConventions, CallingConventions.HasThis))
                 {
-
                     if (TypeHelpers.IsValueType(declaring))
                     {
                         declaring = declaring.MakePointerType();
                     }
 
-                    expectedParams.Insert(0, TypeOnStack.Get(declaring));
+                    var containsThis = expectedParams.Count > 0 && expectedParams[0].Equals(TypeOnStack.Get(declaring));
+                    if (!containsThis)
+                    {
+                        throw new InvalidOperationException("When calling a HasTHis method, expectedParams should start with implicit this");
+                    }
                 }
             }
 

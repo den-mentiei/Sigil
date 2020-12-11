@@ -56,7 +56,7 @@ namespace SigilTests
         }
 
         [Fact]
-        public void Recursive()
+        public void RecursiveStatic()
         {
             var asm = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("Foo"), AssemblyBuilderAccess.Run);
             var mod = asm.DefineDynamicModule("Bar");
@@ -94,6 +94,58 @@ namespace SigilTests
             var two = (int)recur.Invoke(null, new object[] { 2 });
             var three = (int)recur.Invoke(null, new object[] { 3 });
             var ten = (int)recur.Invoke(null, new object[] { 10 });
+
+            Assert.Equal(1, zero);
+            Assert.Equal(1 * 1, one);
+            Assert.Equal(2 * 1 * 1, two);
+            Assert.Equal(3 * 2 * 1 * 1, three);
+            Assert.Equal(10 * 9 * 8 * 7 * 6 * 5 * 4 * 3 * 2 * 1 * 1, ten);
+        }
+
+        [Fact]
+        public void RecursiveInstance()
+        {
+            var asm = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("Foo"), AssemblyBuilderAccess.Run);
+            var mod = asm.DefineDynamicModule("Bar");
+            var t = mod.DefineType("T");
+
+            var e1 = Emit<Func<int, int>>.BuildInstanceMethod(t, "Recursive", MethodAttributes.Public);
+            var cont = e1.DefineLabel("continue");
+            var tmp = e1.DeclareLocal<int>("tmp");
+
+            e1.LoadArgument(1); 
+            e1.LoadConstant(0);
+            e1.UnsignedBranchIfNotEqual(cont);
+
+            e1.LoadConstant(1);
+            e1.Return();
+
+            e1.MarkLabel(cont);
+            e1.LoadArgument(1);
+            e1.Duplicate();
+            e1.LoadConstant(-1);
+            e1.Add();
+            e1.StoreLocal(tmp);
+            e1.LoadArgument(0);
+            e1.LoadLocal(tmp);
+            e1.Call(e1);
+            e1.Multiply();
+
+            e1.Return();
+
+            e1.CreateMethod(out string instrs);
+
+            Assert.Equal("ldarg.1\r\nldc.i4.0\r\nbne.un.s continue\r\nldc.i4.1\r\nret\r\n\r\ncontinue:\r\nldarg.1\r\ndup\r\nldc.i4.m1\r\nadd\r\nstloc.0\r\nldarg.0\r\nldloc.0\r\ncall Recursive\r\nmul\r\nret\r\n", instrs);
+
+            var type = t.CreateType();
+            var recur = type.GetMethod("Recursive", BindingFlags.Public | BindingFlags.Instance);
+            var inst = type.GetConstructor(Type.EmptyTypes).Invoke(new object[0]);
+            
+            var zero = (int)recur.Invoke(inst, new object[] { 0 });
+            var one = (int)recur.Invoke(inst, new object[] { 1 });
+            var two = (int)recur.Invoke(inst, new object[] { 2 });
+            var three = (int)recur.Invoke(inst, new object[] { 3 });
+            var ten = (int)recur.Invoke(inst, new object[] { 10 });
 
             Assert.Equal(1, zero);
             Assert.Equal(1 * 1, one);
